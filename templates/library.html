@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Library</title>
+  <link rel="stylesheet" href="/static/library.css">
+</head>
+<body>
+<div class="page-glow" aria-hidden="true"></div>
+<main class="shell">
+  <header>
+    <a class="brand" href="/" aria-label="Library home"><span class="brand-mark">L</span><span><strong>Library</strong><small>Book collection</small></span></a>
+    <a class="manage-link" href="/management">Manage library <span>→</span></a>
+  </header>
+  <section class="intro">
+    <span class="eyebrow">The collection</span>
+    <div class="intro-row"><div><h1>Browse the<br><em>library.</em></h1><p>Explore every book in the collection. Select a linked title to open its reading page.</p></div><div class="count"><strong id="bookCount">—</strong><span>books</span></div></div>
+  </section>
+  <section class="catalogue">
+    <div class="catalogue-heading"><div><h2>All books</h2><p id="resultLabel">Loading the collection…</p></div><button id="refresh" aria-label="Refresh books" title="Refresh books">↻</button></div>
+    <div class="catalogue-filters"><div class="search-wrap"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Search title, author, year, category..." autocomplete="off"></div><label class="category-filter"><span>Category</span><select id="category"><option value="">All categories</option></select></label><label class="category-filter"><span>Reading status</span><select id="readingStatus"><option value="">All statuses</option><option>Want to Read</option><option>Reading</option><option>Finished</option><option>Paused</option></select></label><label class="category-filter"><span>Sort by</span><select id="sort"><option value="added">Recently added</option><option value="title">Title</option><option value="author">Author</option><option value="year">Year</option><option value="category">Category</option></select></label></div>
+    <div id="books" aria-label="Scrollable book gallery" tabindex="0"><div id="bookSpacer"><div id="bookWindow"></div></div></div>
+    <p id="status" role="status"></p>
+  </section>
+  <footer><span>Library</span><span>Read-only collection view</span></footer>
+</main>
+<script>
+const PAGE_SIZE = 200;
+const CARD_HEIGHT = 412;
+const BUFFER_ROWS = 2;
+const booksElement = document.getElementById('books');
+const spacer = document.getElementById('bookSpacer');
+const windowElement = document.getElementById('bookWindow');
+const statusElement = document.getElementById('status');
+const resultLabel = document.getElementById('resultLabel');
+const searchInput = document.getElementById('search');
+const categoryInput = document.getElementById('category');
+const statusInput = document.getElementById('readingStatus');
+const sortInput = document.getElementById('sort');
+let total = 0;
+let pages = new Map();
+let pending = new Map();
+let generation = 0;
+let searchResults = null;
+let searchTimer;
+let scrollScheduled = false;
+
+function columns() {
+  if (booksElement.clientWidth >= 900) return 4;
+  if (booksElement.clientWidth >= 660) return 3;
+  if (booksElement.clientWidth >= 440) return 2;
+  return 1;
+}
+
+function updateSpacer() {
+  spacer.style.height = `${Math.ceil(total / columns()) * CARD_HEIGHT}px`;
+}
+
+function range() {
+  const count = columns();
+  const firstRow = Math.floor(booksElement.scrollTop / CARD_HEIGHT);
+  const visibleRows = Math.ceil(booksElement.clientHeight / CARD_HEIGHT) + 1;
+  const startRow = Math.max(0, firstRow - BUFFER_ROWS);
+  return {
+    start: startRow * count,
+    end: Math.min(total, (firstRow + visibleRows + BUFFER_ROWS) * count),
+    first: firstRow * count,
+    startRow
+  };
+}
+
+function bookAt(index) {
+  if (searchResults) return searchResults[index];
+  const page = Math.floor(index / PAGE_SIZE);
+  return pages.get(page)?.[index % PAGE_SIZE];
+}
+
+function createCard(book) {
+  const card = document.createElement('article');
+  card.className = 'book-card';
+  const cover = document.createElement('div');
+  cover.className = 'book-cover';
+  cover.textContent = (book.title || '?').trim().charAt(0).toUpperCase();
+  if (book.cover_url) {
+    const image = document.createElement('img');
+    image.src = book.cover_url;
+    image.alt = `Cover of ${book.title}`;
+    image.loading = 'lazy';
+    image.addEventListener('error', () => image.remove());
+    cover.appendChild(image);
+  }
+  const coverLink = document.createElement('a');
+  coverLink.className = 'cover-link';
+  coverLink.href = `/book/${book.id}`;
+  coverLink.setAttribute('aria-label', `View details for ${book.title}`);
+  coverLink.appendChild(cover);
+  const details = document.createElement('div');
+  const title = document.createElement(book.url ? 'a' : 'strong');
+  title.textContent = book.title;
+  if (book.url) {
+    title.href = book.url;
+    title.target = '_blank';
+    title.rel = 'noopener noreferrer';
+    title.title = `Open ${book.title}`;
+  }
+  const author = document.createElement('p');
+  author.textContent = book.author;
+  const category = document.createElement('span');
+  category.className = 'category-badge';
+  category.textContent = book.category || 'Uncategorized';
+  const readingStatus = document.createElement('span');
+  readingStatus.className = 'status-badge';
+  readingStatus.textContent = book.reading_status || 'Want to Read';
+  const meta = document.createElement('span');
+  meta.textContent = `${book.year} · Book ${book.id}`;
+  details.append(title, author, category, readingStatus);
+  if (typeof book.personal_rating === 'number') {
+    const personal = document.createElement('div');
+    personal.className = 'personal-stars';
+    personal.textContent = `${'★'.repeat(book.personal_rating)}${'☆'.repeat(5 - book.personal_rating)} My rating`;
+    details.appendChild(personal);
+  }
+  if (book.nlb_libby) {
+    const libby = document.createElement('a');
+    libby.className = `libby-bar ${book.nlb_libby.available ? 'available' : ''}`;
+    libby.href = book.nlb_libby.search_url;
+    libby.target = '_blank';
+    libby.rel = 'noopener noreferrer';
+    libby.textContent = !book.nlb_libby.found
+      ? 'NLB Libby · Not found'
+      : book.nlb_libby.available
+        ? `NLB Libby · ${book.nlb_libby.available_copies} available`
+        : 'NLB Libby · Waitlist';
+    details.appendChild(libby);
+  }
+  details.appendChild(meta);
+  card.append(coverLink, details);
+  return card;
+}
+
+function render() {
+  const {start, end, startRow} = range();
+  const fragment = document.createDocumentFragment();
+  for (let index = start; index < end; index++) {
+    const book = bookAt(index);
+    if (book) fragment.appendChild(createCard(book));
+    else {
+      const placeholder = document.createElement('article');
+      placeholder.className = 'book-card placeholder';
+      placeholder.textContent = 'Loading…';
+      fragment.appendChild(placeholder);
+    }
+  }
+  windowElement.replaceChildren(fragment);
+  windowElement.style.transform = `translateY(${startRow * CARD_HEIGHT}px)`;
+  resultLabel.textContent = searchResults ? `${total} matching books` : `${total.toLocaleString()} books in the collection`;
+  statusElement.textContent = total ? '' : 'No books found.';
+}
+
+async function request(path, options = {}) {
+  const response = await fetch(path, options);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Could not load books');
+  return data;
+}
+
+async function fetchPage(page, version) {
+  if (page < 0 || pages.has(page) || pending.has(page)) return;
+  if (total && page * PAGE_SIZE >= total) return;
+  const controller = new AbortController();
+  pending.set(page, controller);
+  try {
+    const params = new URLSearchParams({limit: PAGE_SIZE, offset: page * PAGE_SIZE});
+    if (categoryInput.value) params.set('category', categoryInput.value);
+    if (statusInput.value) params.set('status', statusInput.value);
+    params.set('sort', sortInput.value);
+    const data = await request(`/books?${params}`, {signal: controller.signal});
+    if (version !== generation || searchResults) return;
+    total = data.total;
+    document.getElementById('bookCount').textContent = total.toLocaleString();
+    pages.set(page, data.books);
+    updateSpacer();
+    renderAndFetch();
+  } catch (error) {
+    if (error.name !== 'AbortError' && version === generation) statusElement.textContent = error.message;
+  } finally {
+    if (pending.get(page) === controller) pending.delete(page);
+  }
+}
+
+function renderAndFetch() {
+  render();
+  if (searchResults) return;
+  const {start, end, first} = range();
+  const firstPage = Math.floor(start / PAGE_SIZE);
+  const lastPage = Math.floor(Math.max(start, end - 1) / PAGE_SIZE);
+  const centerPage = Math.floor(first / PAGE_SIZE);
+  const needed = [];
+  for (let page = firstPage; page <= lastPage; page++) needed.push(page);
+  needed.sort((a, b) => Math.abs(a - centerPage) - Math.abs(b - centerPage));
+  needed.forEach(page => fetchPage(page, generation));
+}
+
+function loadBooks() {
+  generation++;
+  pending.forEach(controller => controller.abort());
+  pending.clear(); pages.clear(); searchResults = null; total = 0;
+  booksElement.scrollTop = 0; spacer.style.height = '0px';
+  statusElement.textContent = 'Loading books…';
+  fetchPage(0, generation);
+}
+
+searchInput.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  const title = searchInput.value.trim();
+  if (!title) { loadBooks(); return; }
+  generation++;
+  pending.forEach(controller => controller.abort());
+  pending.clear(); pages.clear();
+  const version = generation;
+  searchTimer = setTimeout(async () => {
+    try {
+      const params = new URLSearchParams({limit: PAGE_SIZE, offset: 0, q: title, sort: sortInput.value});
+      if (categoryInput.value) params.set('category', categoryInput.value);
+      if (statusInput.value) params.set('status', statusInput.value);
+      const data = await request(`/books?${params}`);
+      if (version !== generation) return;
+      searchResults = data.books || [];
+      total = searchResults.length;
+      booksElement.scrollTop = 0;
+      document.getElementById('bookCount').textContent = total.toLocaleString();
+      updateSpacer(); render();
+    } catch (error) { if (version === generation) statusElement.textContent = error.message; }
+  }, 250);
+});
+
+booksElement.addEventListener('scroll', () => {
+  if (scrollScheduled) return;
+  scrollScheduled = true;
+  requestAnimationFrame(() => { scrollScheduled = false; renderAndFetch(); });
+});
+new ResizeObserver(() => { updateSpacer(); renderAndFetch(); }).observe(booksElement);
+document.getElementById('refresh').addEventListener('click', loadBooks);
+categoryInput.addEventListener('change', () => {
+  if (searchInput.value.trim()) searchInput.dispatchEvent(new Event('input'));
+  else loadBooks();
+});
+[statusInput, sortInput].forEach(input => input.addEventListener('change', () => {
+  if (searchInput.value.trim()) searchInput.dispatchEvent(new Event('input'));
+  else loadBooks();
+}));
+async function loadCategories() {
+  try {
+    const data = await request('/categories');
+    data.categories
+      .filter(name => (data.counts[name] || 0) > 0)
+      .sort((a, b) => (data.counts[b] - data.counts[a]) || a.localeCompare(b))
+      .forEach(name => {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = `${name} (${data.counts[name] || 0})`;
+      categoryInput.appendChild(option);
+    });
+    if (data.counts.Uncategorized) {
+      const option = document.createElement('option');
+      option.value = 'Uncategorized';
+      option.textContent = `Uncategorized (${data.counts.Uncategorized})`;
+      categoryInput.appendChild(option);
+    }
+  } catch (error) { statusElement.textContent = error.message; }
+}
+loadCategories().then(loadBooks);
+</script>
+</body>
+</html>

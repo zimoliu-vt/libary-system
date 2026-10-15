@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Library API Reference</title><link rel="stylesheet" href="/static/api.css">
+</head>
+<body>
+<header class="api-nav"><a class="brand" href="/"><span class="brand-mark">L</span><span><strong>Library API</strong><small>Reference v1.1</small></span></a><a class="back" href="/">← Back to library</a></header>
+<main>
+  <aside><span class="aside-label">Getting started</span><a href="#introduction">Introduction</a><a href="#pagination">Pagination</a><span class="aside-label">Endpoints</span><a href="#list-books"><b class="get">GET</b> List books</a><a href="#categories"><b class="get">GET</b> Categories</a><a href="#stats"><b class="get">GET</b> Statistics</a><a href="#add-book"><b class="post">POST</b> Add book</a><a href="#update-book"><b class="post">POST</b> Edit book</a><a href="#bulk-update"><b class="post">POST</b> Bulk update</a><a href="#categorize-book"><b class="post">POST</b> Categorize with Jev</a><a href="#libby"><b class="post">POST</b> NLB Libby</a><a href="#transfer"><b class="get">GET</b> Import/export</a><a href="#find-books"><b class="post">POST</b> Find books</a><a href="#remove-book"><b class="post">POST</b> Remove book</a><a href="#logs"><b class="get">GET</b> Activity logs</a></aside>
+  <article>
+    <section class="intro" id="introduction"><span class="pill">REST API · JSON</span><h1>Build with your<br><em>library data.</em></h1><p>A small, predictable API for browsing and managing your book collection on the local network. The machine-readable API description is available at <a href="/api.json">/api.json</a>.</p><div class="base-url"><span>Base URL</span><code id="baseUrl"></code><button data-copy="baseUrl">Copy</button></div></section>
+    <section id="pagination"><span class="section-number">01</span><h2>Pagination and filters</h2><p>Collection endpoints accept <code>limit</code>, <code>offset</code>, and <code>category</code> query parameters. Activity logs also accept <code>action=ADD|UPDATE|REMOVE</code> and <code>q=search</code>.</p><div class="parameter-grid"><div><code>limit</code><span>1–200 records</span></div><div><code>offset</code><span>Starting position</span></div><div><code>category</code><span>Exact category name</span></div></div></section>
+    <section id="list-books" class="endpoint"><div class="endpoint-title"><span class="method get">GET</span><code>/books</code></div><h2>List books</h2><p>Returns the complete collection or a paginated and filtered window. Supported filters are <code>q</code>, <code>category</code>, and <code>status</code>; sort values are <code>added</code>, <code>title</code>, <code>author</code>, <code>year</code>, and <code>category</code>.</p><div class="code-block"><div><span>Request</span><button data-copy="getBooks">Copy</button></div><pre id="getBooks">GET /books?limit=200&amp;offset=0&amp;q=asimov&amp;status=Finished&amp;sort=author</pre></div></section>
+    <section id="categories" class="endpoint"><div class="endpoint-title"><span class="method get">GET</span><code>/categories</code></div><h2>List categories</h2><p>Returns the allowed Jev categories, current book counts, and whether a server-side API key is configured.</p></section>
+    <section id="stats" class="endpoint"><div class="endpoint-title"><span class="method get">GET</span><code>/stats</code></div><h2>Library statistics</h2><p>Returns totals grouped by category and reading status, the top five authors, and the publication-year range.</p></section>
+    <section id="add-book" class="endpoint"><div class="endpoint-title"><span class="method post">POST</span><code>/books/add</code></div><h2>Add a book</h2><p>Creates a new book and records the action in the activity log. Send JSON for a book without a cover, or use multipart form data with an optional <code>cover</code> image. JPEG, PNG, WebP, and GIF files up to 6 MB are accepted. A duplicate title-and-author pair returns HTTP <code>409</code>.</p><div class="code-block"><div><span>JSON · without a cover</span><button data-copy="addBody">Copy</button></div><pre id="addBody">{
+  "title": "The Left Hand of Darkness",
+  "author": "Ursula K. Le Guin",
+  "year": 1969,
+  "url": "https://example.com/books/left-hand-of-darkness",
+  "auto_categorize": true,
+  "reading_status": "Want to Read",
+  "personal_rating": 5
+}</pre></div><div class="code-block"><div><span>Multipart · with a cover</span><button data-copy="addCover">Copy</button></div><pre id="addCover">curl -X POST <span class="api-origin"></span>/books/add \
+  -F "title=Dune" \
+  -F "author=Frank Herbert" \
+  -F "year=1965" \
+  -F "url=https://example.com/books/dune" \
+  -F "cover=@/path/to/dune.jpg"</pre></div><div class="field-table"><div><code>title</code><span>Text · required</span></div><div><code>author</code><span>Text · required</span></div><div><code>year</code><span>Integer · required</span></div><div><code>url</code><span>HTTP(S) URL · optional</span></div><div><code>cover</code><span>Image · optional · max 6 MB</span></div></div></section>
+    <section id="update-book" class="endpoint"><div class="endpoint-title"><span class="method post">POST</span><code>/books/update</code></div><h2>Edit a book</h2><p>Updates an existing book. JSON can edit metadata or remove a cover. Use multipart form data to upload a replacement cover.</p><div class="code-block"><div><span>JSON body</span><button data-copy="updateBody">Copy</button></div><pre id="updateBody">{
+  "id": 42,
+  "title": "Dune",
+  "author": "Frank Herbert",
+  "year": 1965,
+  "url": "https://example.com/books/dune",
+  "remove_cover": false,
+  "category": "Science Fiction",
+  "reading_status": "Reading",
+  "personal_rating": 4
+}</pre></div></section>
+    <section id="bulk-update" class="endpoint"><div class="endpoint-title"><span class="method post">POST</span><code>/books/bulk-update</code></div><h2>Bulk update books</h2><p>Changes the category, reading status, or both for several numeric book IDs.</p><div class="code-block"><div><span>JSON body</span><button data-copy="bulkBody">Copy</button></div><pre id="bulkBody">{
+  "ids": [12, 18, 24],
+  "category": "Science Fiction",
+  "reading_status": "Finished"
+}</pre></div></section>
+    <section id="categorize-book" class="endpoint"><div class="endpoint-title"><span class="method post">POST</span><code>/books/categorize</code></div><h2>Categorize with TypeSafe Jev</h2><p>Classifies one existing book from its title, author, and year. The TypeSafe API key stays on the Flask server in <code>.env</code>. A successful response includes the chosen category, confidence when supplied by Jev, and model name.</p><div class="code-block"><div><span>JSON body</span><button data-copy="categorizeBody">Copy</button></div><pre id="categorizeBody">{ "id": 42 }</pre></div></section>
+    <section id="libby" class="endpoint"><div class="endpoint-title"><span class="method post">POST</span><code>/books/libby-availability</code></div><h2>Check NLB Libby</h2><p>Searches NLB’s public OverDrive catalogue by title, verifies the author, and stores matching eBook or audiobook copies, holds, availability, and a search link. Availability is a snapshot and should be refreshed before borrowing.</p><div class="code-block"><div><span>One book</span><button data-copy="libbyBody">Copy</button></div><pre id="libbyBody">POST /books/libby-availability
+{ "id": 42 }</pre></div><div class="code-block"><div><span>Reload-safe background check</span><button data-copy="libbyBulk">Copy</button></div><pre id="libbyBulk">POST /books/libby-availability/bulk
+{ "refresh_all": false }
+
+GET /books/libby-availability/bulk</pre></div></section>
+    <section id="transfer" class="endpoint"><div class="endpoint-title"><span class="method get">GET</span><code>/books/export</code></div><h2>Import and export</h2><p>Download with <code>GET /books/export?format=json</code> or <code>format=csv</code>. Import by posting a multipart JSON or CSV file under the <code>file</code> field to <code>/books/import</code>. Duplicate title-and-author pairs are skipped.</p></section>
+    <section id="find-books" class="endpoint"><div class="endpoint-title"><span class="method post">POST</span><code>/books/find</code></div><h2>Find books</h2><p>Performs a case-insensitive partial match across title, author, year, category, reading status, and book ID. Optional <code>category</code> and <code>status</code> fields narrow the result.</p><div class="code-block"><div><span>JSON body</span><button data-copy="findBody">Copy</button></div><pre id="findBody">{ "query": "Ursula", "status": "Finished" }</pre></div></section>
+    <section id="remove-book" class="endpoint"><div class="endpoint-title"><span class="method post">POST</span><code>/books/remove</code></div><h2>Remove a book</h2><p>Deletes the book matching the supplied numeric identifier.</p><div class="code-block"><div><span>JSON body</span><button data-copy="removeBody">Copy</button></div><pre id="removeBody">{ "id": 42 }</pre></div></section>
+    <section id="logs" class="endpoint"><div class="endpoint-title"><span class="method get">GET</span><code>/logs</code></div><h2>Activity logs</h2><p>Returns additions and removals. Paginated results are ordered newest first and can be filtered by action or text.</p><div class="code-block"><div><span>Request</span><button data-copy="getLogs">Copy</button></div><pre id="getLogs">GET /logs?limit=200&amp;offset=0&amp;action=ADD&amp;q=dune</pre></div></section>
+  </article>
+</main>
+<script>
+document.getElementById('baseUrl').textContent = window.location.origin;
+document.querySelectorAll('.api-origin').forEach(element => {
+  element.textContent = window.location.origin;
+});
+document.querySelectorAll('[data-copy]').forEach(button => button.addEventListener('click', async () => {
+  await navigator.clipboard.writeText(document.getElementById(button.dataset.copy).textContent);
+  const old = button.textContent; button.textContent = 'Copied'; setTimeout(() => button.textContent = old, 1200);
+}));
+</script>
+</body></html>

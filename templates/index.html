@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Library Management</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="page-glow" aria-hidden="true"></div>
+<main class="container">
+  <header class="topbar">
+    <a class="brand" href="/management" aria-label="Library Management home"><span class="brand-mark">L</span><span><strong>Library</strong><small>Management system</small></span></a>
+    <nav class="top-actions"><a class="docs-link" href="/">View library</a><a class="docs-link" href="/api" target="_blank" rel="noopener">API reference <span>↗</span></a></nav>
+  </header>
+  <section class="hero">
+    <div><span class="eyebrow">Library dashboard</span><h1>Library<br><em>Management</em></h1><p>Add, search, browse, and remove books from your collection.</p></div>
+    <div class="stat" aria-label="Collection size"><span class="stat-icon" aria-hidden="true">▤</span><div><strong id="bookCount">0</strong><small>books catalogued</small></div></div>
+  </section>
+  <section class="panel stats-panel">
+    <div class="section-heading"><div><span class="eyebrow">At a glance</span><h2>Library statistics</h2></div></div>
+    <div id="statsGrid" class="stats-grid"><span>Loading statistics…</span></div>
+    <div id="categoryChart" class="category-chart"></div>
+  </section>
+  <section class="panel add-panel">
+    <div class="panel-heading"><span class="panel-icon" aria-hidden="true">＋</span><div><h2>Add a book</h2><p>Grow your catalogue with a new title.</p></div></div>
+    <form id="addForm">
+      <label><span>Title</span><input id="title" type="text" placeholder="e.g. The Left Hand of Darkness" required></label>
+      <label><span>Author</span><input id="author" type="text" placeholder="e.g. Ursula K. Le Guin" required></label>
+      <label><span>Year</span><input id="year" type="number" step="1" placeholder="1969" required></label>
+      <label class="cover-field"><span>Cover <small>optional</small></span><input id="cover" name="cover" type="file" accept="image/jpeg,image/png,image/webp,image/gif"><span class="file-label">Choose image</span></label>
+      <label class="url-field"><span>Book URL <small>optional</small></span><input id="bookUrl" type="url" placeholder="https://example.com/book"></label>
+      <label class="status-field"><span>Reading status</span><select id="addReadingStatus"><option>Want to Read</option><option>Reading</option><option>Finished</option><option>Paused</option></select></label>
+      <label class="rating-field"><span>My rating <small>optional</small></span><select id="addPersonalRating"><option value="">Not rated</option><option value="1">★</option><option value="2">★★</option><option value="3">★★★</option><option value="4">★★★★</option><option value="5">★★★★★</option></select></label>
+      <label class="check-field auto-category"><input id="autoCategorize" type="checkbox" checked><span>Categorize with Jev</span></label>
+      <button type="submit"><span aria-hidden="true">＋</span> Add book</button>
+    </form>
+  </section>
+  <section class="panel">
+    <div class="section-heading"><div><span class="eyebrow">Collection</span><h2>Browse your shelves</h2></div><div class="collection-actions"><button id="refreshLibby" class="libby-button" type="button">Check NLB Libby</button><button id="categorizeAll" class="jev-button" type="button">Categorize with Jev</button><button class="icon-button" id="refreshBooks" title="Refresh books" aria-label="Refresh books">↻</button></div></div>
+    <div class="search-wrap"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Search title, author, year, category, or status..." autocomplete="off"></div>
+    <div class="bulk-toolbar">
+      <strong><span id="selectedCount">0</span> selected</strong>
+      <select id="bulkCategory"><option value="">Keep category</option></select>
+      <select id="bulkStatus"><option value="">Keep reading status</option><option>Want to Read</option><option>Reading</option><option>Finished</option><option>Paused</option></select>
+      <button id="applyBulk" type="button">Apply changes</button><button id="clearSelection" class="secondary" type="button">Clear</button>
+    </div>
+    <div id="books" aria-label="Scrollable book collection" tabindex="0">
+      <div id="bookSpacer"><div id="bookWindow"></div></div>
+    </div>
+    <p id="loadingStatus" role="status"></p>
+  </section>
+  <section class="panel transfer-panel">
+    <div class="section-heading"><div><span class="eyebrow">Backup & transfer</span><h2>Import or export</h2></div></div>
+    <p>Download a portable copy of your catalogue or import books from JSON or CSV. Duplicate title-and-author matches are skipped.</p>
+    <div class="transfer-actions"><a href="/books/export?format=json">Export JSON</a><a href="/books/export?format=csv">Export CSV</a><label><input id="importFile" type="file" accept=".json,.csv,application/json,text/csv"><span>Choose import file</span></label><button id="importBooks" type="button">Import books</button></div>
+  </section>
+  <section class="panel">
+    <div class="section-heading"><div><span class="eyebrow">Recent changes</span><h2>Activity</h2></div><button class="icon-button" id="refreshLogs" title="Refresh activity" aria-label="Refresh activity">↻</button></div>
+    <div class="log-filters">
+      <label><span>Action</span><select id="logAction"><option value="">All actions</option><option value="ADD">Added</option><option value="UPDATE">Edited</option><option value="REMOVE">Removed</option></select></label>
+      <label><span>Search activity</span><input id="logSearch" type="search" placeholder="Title, author, or book ID..." autocomplete="off"></label>
+      <button id="clearLogFilters" type="button">Clear</button>
+    </div>
+    <div id="logs" aria-label="Scrollable activity logs" tabindex="0">
+      <div id="logSpacer"><div id="logWindow"></div></div>
+    </div>
+    <p id="logLoadingStatus" role="status"></p>
+  </section>
+  <p id="message" role="status"></p>
+  <footer><span>Library Management</span><span>Local, fast, and yours.</span></footer>
+</main>
+<dialog id="editDialog">
+  <form id="editForm" method="dialog">
+    <div class="dialog-heading"><div><span class="eyebrow">Edit record</span><h2>Edit book</h2></div><button id="closeEdit" class="dialog-close" type="button" aria-label="Close edit form">×</button></div>
+    <input id="editId" type="hidden">
+    <label><span>Title</span><input id="editTitle" type="text" required></label>
+    <label><span>Author</span><input id="editAuthor" type="text" required></label>
+    <label><span>Year</span><input id="editYear" type="number" step="1" required></label>
+    <label><span>Category</span><select id="editCategory"></select></label>
+    <label><span>Reading status</span><select id="editReadingStatus"><option>Want to Read</option><option>Reading</option><option>Finished</option><option>Paused</option></select></label>
+    <label><span>My rating</span><select id="editPersonalRating"><option value="">Not rated</option><option value="1">★</option><option value="2">★★</option><option value="3">★★★</option><option value="4">★★★★</option><option value="5">★★★★★</option></select></label>
+    <label class="dialog-wide"><span>Book URL <small>optional</small></span><input id="editUrl" type="url" placeholder="https://example.com/book"></label>
+    <label class="dialog-wide"><span>Replacement cover <small>optional</small></span><input id="editCover" type="file" accept="image/jpeg,image/png,image/webp,image/gif"></label>
+    <label class="check-field dialog-wide"><input id="editRemoveCover" type="checkbox"><span>Remove the current cover</span></label>
+    <div class="dialog-actions"><button id="cancelEdit" type="button" class="secondary">Cancel</button><button type="submit">Save changes</button></div>
+  </form>
+</dialog>
+<script>
+const PAGE_SIZE = 200;
+const BOOK_CARD_HEIGHT = 248;
+const BUFFER_ROWS = 3;
+const booksContainer = document.getElementById('books');
+const bookSpacer = document.getElementById('bookSpacer');
+const bookWindow = document.getElementById('bookWindow');
+const loadingStatus = document.getElementById('loadingStatus');
+const bookCount = document.getElementById('bookCount');
+const searchInput = document.getElementById('search');
+const logsContainer = document.getElementById('logs');
+const logSpacer = document.getElementById('logSpacer');
+const logWindow = document.getElementById('logWindow');
+const logLoadingStatus = document.getElementById('logLoadingStatus');
+const LOG_PAGE_SIZE = 200;
+const LOG_ROW_HEIGHT = 64;
+const LOG_BUFFER = 100;
+let totalLogs = 0;
+let logPages = new Map();
+let logPending = new Map();
+let logGeneration = 0;
+let logScrollScheduled = false;
+const message = document.getElementById('message');
+
+let totalBooks = 0;
+let pages = new Map();
+let pending = new Map();
+let generation = 0;
+let searchMode = false;
+let searchResults = [];
+let searchTimer;
+let scheduled = false;
+const selectedBookIds = new Set();
+
+function updateSelectionCount() {
+    document.getElementById('selectedCount').textContent = selectedBookIds.size;
+}
+
+function bookColumnCount() {
+    if (booksContainer.clientWidth >= 820) return 3;
+    if (booksContainer.clientWidth >= 700) return 2;
+    return 1;
+}
+
+function updateBookSpacer() {
+    const rows = Math.ceil(totalBooks / bookColumnCount());
+    bookSpacer.style.height = `${rows * BOOK_CARD_HEIGHT}px`;
+}
+
+function firstVisibleBookIndex() {
+    return Math.floor(booksContainer.scrollTop / BOOK_CARD_HEIGHT) * bookColumnCount();
+}
+
+function showMessage(text) { message.textContent = text; }
+
+async function apiRequest(path, options = {}) {
+    const response = await fetch(path, options);
+    const contentType = response.headers.get('content-type') || '';
+    let data;
+    if (contentType.includes('application/json')) {
+        data = await response.json();
+    } else {
+        const text = await response.text();
+        data = {error: response.ok ? 'Server returned an unexpected response' : `Server error (${response.status})`};
+        console.error('Unexpected server response:', text.slice(0, 500));
+    }
+    if (!response.ok) throw new Error(data.error || data.message || 'Request failed');
+    return data;
+}
+
+function resetRequests() {
+    generation++;
+    for (const controller of pending.values()) controller.abort();
+    pending.clear();
+    pages.clear();
+}
+
+function createBookRow(book) {
+    const row = document.createElement('div');
+    row.className = 'book';
+    const cover = document.createElement('div');
+    cover.className = 'book-cover';
+    cover.textContent = (book.title || '?').trim().charAt(0).toUpperCase();
+    if (book.cover_url) {
+        const image = document.createElement('img');
+        image.src = book.cover_url;
+        image.alt = '';
+        image.loading = 'lazy';
+        image.addEventListener('error', () => image.remove());
+        cover.appendChild(image);
+    }
+    const info = document.createElement('div');
+    info.className = 'book-info';
+    const title = document.createElement(book.url ? 'a' : 'strong');
+    title.textContent = book.title;
+    if (book.url) {
+        title.className = 'book-title-link';
+        title.href = book.url;
+        title.target = '_blank';
+        title.rel = 'noopener noreferrer';
+        title.title = `Open ${book.title}`;
+    }
+    const details = document.createElement('p');
+    details.textContent = `${book.author} · ${book.year} · ${book.reading_status || 'Want to Read'} · ID ${book.id}`;
+    const category = document.createElement('span');
+    category.className = 'book-category';
+    category.textContent = book.category || 'Uncategorized';
+    info.append(title, details, category);
+    if (typeof book.personal_rating === 'number') {
+        const personal = document.createElement('div');
+        personal.className = 'personal-rating';
+        personal.textContent = `${'★'.repeat(book.personal_rating)}${'☆'.repeat(5 - book.personal_rating)} My rating`;
+        info.appendChild(personal);
+    }
+    if (book.nlb_libby) {
+        const libby = document.createElement('div');
+        libby.className = `libby-status ${book.nlb_libby.available ? 'available' : ''}`;
+        libby.textContent = !book.nlb_libby.found
+            ? 'NLB Libby · Not found'
+            : book.nlb_libby.available
+                ? `NLB Libby · ${book.nlb_libby.available_copies} available`
+                : 'NLB Libby · Waitlist';
+        info.appendChild(libby);
+    }
+    const actions = document.createElement('div');
+    actions.className = 'book-actions';
+    const selectLabel = document.createElement('label');
+    selectLabel.className = 'select-book';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = selectedBookIds.has(book.id);
+    checkbox.setAttribute('aria-label', `Select ${book.title}`);
+    checkbox.addEventListener('change', () => {
+        if (checkbox.checked) selectedBookIds.add(book.id);
+        else selectedBookIds.delete(book.id);
+        updateSelectionCount();
+    });
+    selectLabel.appendChild(checkbox);
+    const detailsLink = document.createElement('a');
+    detailsLink.className = 'details-button';
+    detailsLink.href = `/book/${book.id}`;
+    detailsLink.textContent = 'Details';
+    const editButton = document.createElement('button');
+    editButton.className = 'edit-button';
+    editButton.textContent = 'Edit';
+    editButton.addEventListener('click', () => openEditBook(book));
+    const removeButton = document.createElement('button');
+    removeButton.className = 'danger';
+    removeButton.textContent = 'Remove';
+    removeButton.addEventListener('click', () => removeBook(book.id));
+    actions.append(detailsLink, editButton, removeButton);
+    row.append(selectLabel, cover, info, actions);
+    return row;
+}
+
+function visibleRange() {
+    const columns = bookColumnCount();
+    const firstRow = Math.floor(booksContainer.scrollTop / BOOK_CARD_HEIGHT);
+    const visibleRows = Math.min(
+        Math.ceil(booksContainer.clientHeight / BOOK_CARD_HEIGHT) + 1,
+        Math.ceil(700 / BOOK_CARD_HEIGHT) + 1
+    );
+    const startRow = Math.max(0, firstRow - BUFFER_ROWS);
+    const endRow = firstRow + visibleRows + BUFFER_ROWS;
+    // A broken or missing stylesheet must not make the virtual spacer look like
+    // a viewport containing the entire collection and trigger a request storm.
+    return {
+        start: startRow * columns,
+        end: Math.min(totalBooks, endRow * columns),
+        first: firstRow * columns,
+        startRow
+    };
+}
+
+function getBook(index) {
+    if (searchMode) return searchResults[index];
+    const page = Math.floor(index / PAGE_SIZE);
+    return pages.get(page)?.[index % PAGE_SIZE];
+}
+
+function renderWindow() {
+    const {start, end, startRow} = visibleRange();
+    const fragment = document.createDocumentFragment();
+    // Use fixed-height placeholders while a requested page is in flight.
+    // This prevents jumps and leaves the full scroll height intact.
+    for (let i = start; i < end; i++) {
+        const book = getBook(i);
+        if (book) {
+            fragment.appendChild(createBookRow(book));
+        } else {
+            const placeholder = document.createElement('div');
+            placeholder.className = 'book book-placeholder';
+            placeholder.textContent = 'Loading…';
+            fragment.appendChild(placeholder);
+        }
+    }
+    bookWindow.replaceChildren(fragment);
+    bookWindow.style.transform = `translateY(${startRow * BOOK_CARD_HEIGHT}px)`;
+    loadingStatus.textContent = totalBooks
+        ? `Showing nearby books · ${totalBooks.toLocaleString()} total`
+        : 'No books found.';
+}
+
+async function fetchPage(page, version) {
+    if (page < 0 || pages.has(page) || pending.has(page)) return;
+    if (totalBooks && page * PAGE_SIZE >= totalBooks) return;
+    const controller = new AbortController();
+    pending.set(page, controller);
+    try {
+        const data = await apiRequest(
+            `/books?limit=${PAGE_SIZE}&offset=${page * PAGE_SIZE}`,
+            {signal: controller.signal}
+        );
+        if (version !== generation || searchMode) return;
+        if (!Array.isArray(data.books) || !Number.isInteger(data.total)) {
+            throw new Error('Pagination response missing books or total');
+        }
+        totalBooks = data.total;
+        bookCount.textContent = totalBooks.toLocaleString();
+        updateBookSpacer();
+        pages.set(page, data.books);
+        // Keep only nearby batches, so old data is unloaded.
+        const currentPage = Math.floor(firstVisibleBookIndex() / PAGE_SIZE);
+        for (const key of pages.keys()) {
+            if (Math.abs(key - currentPage) > 2) pages.delete(key);
+        }
+        updateViewport();
+    } catch (error) {
+        if (version === generation && error.name !== 'AbortError') {
+            showMessage(error.message);
+            loadingStatus.textContent = 'Could not load books. Scroll or refresh to retry.';
+        }
+    } finally {
+        if (pending.get(page) === controller) pending.delete(page);
+    }
+}
+
+function updateViewport() {
+    renderWindow();
+    if (searchMode) return;
+    const {start, end, first} = visibleRange();
+    const version = generation;
+    // Prefetch pages covering the visible range and both buffers.
+    // Fetch the page containing the viewport first.
+    const firstPage = Math.floor(start / PAGE_SIZE);
+    const lastPage = Math.floor(Math.max(start, end - 1) / PAGE_SIZE);
+    const centerPage = Math.floor(first / PAGE_SIZE);
+    const needed = [];
+    for (let page = firstPage; page <= lastPage; page++) needed.push(page);
+    needed.sort((a, b) => Math.abs(a - centerPage) - Math.abs(b - centerPage));
+    for (const page of needed) fetchPage(page, version);
+}
+
+async function loadBooks() {
+    clearTimeout(searchTimer);
+    searchMode = false;
+    searchInput.value = '';
+    resetRequests();
+    totalBooks = 0;
+    searchResults = [];
+    selectedBookIds.clear();
+    updateSelectionCount();
+    bookWindow.replaceChildren();
+    bookSpacer.style.height = '0px';
+    booksContainer.scrollTop = 0;
+    loadingStatus.textContent = 'Loading books...';
+    await fetchPage(0, generation);
+}
+
+booksContainer.addEventListener('scroll', () => {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(() => {
+        scheduled = false;
+        updateViewport();
+    });
+});
+
+new ResizeObserver(() => {
+    updateBookSpacer();
+    updateViewport();
+}).observe(booksContainer);
+
+document.getElementById('addForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    const body = new FormData();
+    body.append('title', document.getElementById('title').value);
+    body.append('author', document.getElementById('author').value);
+    body.append('year', document.getElementById('year').value);
+    body.append('url', document.getElementById('bookUrl').value);
+    body.append('reading_status', document.getElementById('addReadingStatus').value);
+    body.append('personal_rating', document.getElementById('addPersonalRating').value);
+    body.append('auto_categorize', document.getElementById('autoCategorize').checked);
+    const cover = document.getElementById('cover').files[0];
+    if (cover) body.append('cover', cover);
+    try {
+        await apiRequest('/books/add', {
+            method: 'POST', body
+        });
+        event.target.reset();
+        event.target.querySelector('.file-label').textContent = 'Choose image';
+        showMessage('Book added successfully!');
+        await loadBooks();
+        await loadLogs();
+        await loadStats();
+    } catch (error) { showMessage(error.message); }
+});
+
+document.getElementById('cover').addEventListener('change', event => {
+    const label = event.target.parentElement.querySelector('.file-label');
+    label.textContent = event.target.files[0]?.name || 'Choose image';
+});
+
+async function removeBook(id) {
+    if (!confirm('Remove this book?')) return;
+    try {
+        await apiRequest('/books/remove', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({id})
+        });
+        showMessage('Book removed successfully!');
+        await loadBooks();
+        await loadLogs();
+        await loadStats();
+    } catch (error) { showMessage(error.message); }
+}
+
+const editDialog = document.getElementById('editDialog');
+
+function openEditBook(book) {
+    document.getElementById('editId').value = book.id;
+    document.getElementById('editTitle').value = book.title;
+    document.getElementById('editAuthor').value = book.author;
+    document.getElementById('editYear').value = book.year;
+    document.getElementById('editUrl').value = book.url || '';
+    document.getElementById('editCategory').value = book.category || 'Uncategorized';
+    document.getElementById('editReadingStatus').value = book.reading_status || 'Want to Read';
+    document.getElementById('editPersonalRating').value = book.personal_rating || '';
+    document.getElementById('editCover').value = '';
+    document.getElementById('editRemoveCover').checked = false;
+    document.getElementById('editRemoveCover').disabled = !book.cover_url;
+    editDialog.showModal();
+}
+
+document.getElementById('closeEdit').addEventListener('click', () => editDialog.close());
+document.getElementById('cancelEdit').addEventListener('click', () => editDialog.close());
+editDialog.addEventListener('click', event => {
+    if (event.target === editDialog) editDialog.close();
+});
+
+document.getElementById('editForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    const body = new FormData();
+    body.append('id', document.getElementById('editId').value);
+    body.append('title', document.getElementById('editTitle').value);
+    body.append('author', document.getElementById('editAuthor').value);
+    body.append('year', document.getElementById('editYear').value);
+    body.append('url', document.getElementById('editUrl').value);
+    body.append('category', document.getElementById('editCategory').value);
+    body.append('reading_status', document.getElementById('editReadingStatus').value);
+    body.append('personal_rating', document.getElementById('editPersonalRating').value);
+    body.append('remove_cover', document.getElementById('editRemoveCover').checked);
+    const cover = document.getElementById('editCover').files[0];
+    if (cover) body.append('cover', cover);
+    try {
+        await apiRequest('/books/update', {method: 'POST', body});
+        editDialog.close();
+        showMessage('Book updated successfully!');
+        await loadBooks();
+        await loadLogs();
+        await loadStats();
+    } catch (error) { showMessage(error.message); }
+});
+
+// Search API currently returns every match; render at most 200 for now.
+searchInput.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    const title = searchInput.value.trim();
+    if (!title) { loadBooks(); return; }
+    resetRequests();
+    searchMode = true;
+    const version = generation;
+    loadingStatus.textContent = 'Searching...';
+    searchTimer = setTimeout(async () => {
+        try {
+            const data = await apiRequest('/books/find', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({query: title})
+            });
+            if (version !== generation) return;
+            const matches = data.books || [];
+            searchResults = matches.slice(0, PAGE_SIZE);
+            totalBooks = searchResults.length;
+            booksContainer.scrollTop = 0;
+            updateBookSpacer();
+            renderWindow();
+            loadingStatus.textContent = `Showing ${totalBooks} of ${matches.length} matches`;
+        } catch (error) {
+            if (version === generation) showMessage(error.message);
+        }
+    }, 300);
+});
+
+function logVisibleRange() {
+    const first = Math.floor(logsContainer.scrollTop / LOG_ROW_HEIGHT);
+    const visibleCount = Math.min(
+        Math.ceil(logsContainer.clientHeight / LOG_ROW_HEIGHT) + 1,
+        Math.ceil(500 / LOG_ROW_HEIGHT) + 1
+    );
+    return {
+        start: Math.max(0, first - LOG_BUFFER),
+        end: Math.min(totalLogs, first + visibleCount + LOG_BUFFER),
+        first
+    };
+}
+
+function makeLogRow(log) {
+    const row = document.createElement('div');
+    row.className = 'log';
+    if (log) {
+        row.textContent = `${log.action}: ${log.title} (${log.timestamp})`;
+        row.title = row.textContent;
+    } else {
+        row.textContent = 'Loading…';
+        row.classList.add('log-placeholder');
+    }
+    return row;
+}
+
+function renderLogWindow() {
+    const {start, end} = logVisibleRange();
+    const fragment = document.createDocumentFragment();
+    for (let index = start; index < end; index++) {
+        const page = Math.floor(index / LOG_PAGE_SIZE);
+        const log = logPages.get(page)?.[index % LOG_PAGE_SIZE];
+        fragment.appendChild(makeLogRow(log));
+    }
+    logWindow.replaceChildren(fragment);
+    logWindow.style.transform = `translateY(${start * LOG_ROW_HEIGHT}px)`;
+    logLoadingStatus.textContent = totalLogs
+        ? `${totalLogs.toLocaleString()} activity records · newest first`
+        : 'No activity yet.';
+}
+
+async function fetchLogPage(page, version) {
+    if (page < 0 || logPages.has(page) || logPending.has(page)) return;
+    if (totalLogs && page * LOG_PAGE_SIZE >= totalLogs) return;
+    const controller = new AbortController();
+    logPending.set(page, controller);
+    try {
+        const params = new URLSearchParams({
+            limit: LOG_PAGE_SIZE,
+            offset: page * LOG_PAGE_SIZE
+        });
+        const action = document.getElementById('logAction').value;
+        const query = document.getElementById('logSearch').value.trim();
+        if (action) params.set('action', action);
+        if (query) params.set('q', query);
+        const data = await apiRequest(
+            `/logs?${params}`,
+            {signal: controller.signal}
+        );
+        if (version !== logGeneration) return;
+        if (!Array.isArray(data.logs) || !Number.isInteger(data.total)) {
+            throw new Error('Log pagination response is missing logs or total');
+        }
+        totalLogs = data.total;
+        logSpacer.style.height = `${totalLogs * LOG_ROW_HEIGHT}px`;
+        logPages.set(page, data.logs);
+        const currentPage = Math.floor(
+            logsContainer.scrollTop / LOG_ROW_HEIGHT / LOG_PAGE_SIZE
+        );
+        for (const key of logPages.keys()) {
+            if (Math.abs(key - currentPage) > 2) logPages.delete(key);
+        }
+        updateLogViewport();
+    } catch (error) {
+        if (version === logGeneration && error.name !== 'AbortError') {
+            logLoadingStatus.textContent = 'Could not load logs. Refresh to retry.';
+            showMessage(error.message);
+        }
+    } finally {
+        if (logPending.get(page) === controller) logPending.delete(page);
+    }
+}
+
+function updateLogViewport() {
+    renderLogWindow();
+    const {start, end, first} = logVisibleRange();
+    const firstPage = Math.floor(start / LOG_PAGE_SIZE);
+    const lastPage = Math.floor(Math.max(start, end - 1) / LOG_PAGE_SIZE);
+    const centerPage = Math.floor(first / LOG_PAGE_SIZE);
+    const needed = [];
+    for (let page = firstPage; page <= lastPage; page++) needed.push(page);
+    needed.sort((a, b) => Math.abs(a - centerPage) - Math.abs(b - centerPage));
+    for (const page of needed) fetchLogPage(page, logGeneration);
+}
+
+async function loadLogs() {
+    logGeneration++;
+    for (const controller of logPending.values()) controller.abort();
+    logPending.clear();
+    logPages.clear();
+    totalLogs = 0;
+    logWindow.replaceChildren();
+    logSpacer.style.height = '0px';
+    logsContainer.scrollTop = 0;
+    logLoadingStatus.textContent = 'Loading logs...';
+    await fetchLogPage(0, logGeneration);
+}
+
+logsContainer.addEventListener('scroll', () => {
+    if (logScrollScheduled) return;
+    logScrollScheduled = true;
+    requestAnimationFrame(() => {
+        logScrollScheduled = false;
+        updateLogViewport();
+    });
+});
+
+document.getElementById('refreshBooks').addEventListener('click', loadBooks);
+document.getElementById('refreshLogs').addEventListener('click', loadLogs);
+document.getElementById('logAction').addEventListener('change', loadLogs);
+let logFilterTimer;
+document.getElementById('logSearch').addEventListener('input', () => {
+    clearTimeout(logFilterTimer);
+    logFilterTimer = setTimeout(loadLogs, 250);
+});
+document.getElementById('clearLogFilters').addEventListener('click', () => {
+    document.getElementById('logAction').value = '';
+    document.getElementById('logSearch').value = '';
+    loadLogs();
+});
+async function loadCategoryOptions() {
+    const select = document.getElementById('editCategory');
+    const bulkSelect = document.getElementById('bulkCategory');
+    select.replaceChildren();
+    bulkSelect.innerHTML = '<option value="">Keep category</option>';
+    const uncategorized = document.createElement('option');
+    uncategorized.value = 'Uncategorized';
+    uncategorized.textContent = 'Uncategorized';
+    select.appendChild(uncategorized);
+    try {
+        const data = await apiRequest('/categories');
+        data.categories.forEach(name => {
+            const option = document.createElement('option');
+            option.value = name;
+            option.textContent = name;
+            select.appendChild(option);
+            const bulkOption = option.cloneNode(true);
+            bulkSelect.appendChild(bulkOption);
+        });
+        const bulkUncategorized = uncategorized.cloneNode(true);
+        bulkSelect.appendChild(bulkUncategorized);
+        const button = document.getElementById('categorizeAll');
+        if (!data.jev_configured) {
+            button.title = 'Add TYPESAFE_API_KEY to .env first';
+        }
+    } catch (error) { showMessage(error.message); }
+}
+
+document.getElementById('categorizeAll').addEventListener('click', async event => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+        const data = await apiRequest('/books');
+        const books = (data.books || []).filter(book => !book.category || book.category === 'Uncategorized');
+        if (!books.length) {
+            showMessage('Every book already has a category.');
+            return;
+        }
+        let completed = 0;
+        for (const book of books) {
+            button.textContent = `Categorizing ${completed + 1} / ${books.length}`;
+            await apiRequest('/books/categorize', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({id: book.id})
+            });
+            completed++;
+            await new Promise(resolve => setTimeout(resolve, 300));
+        }
+        showMessage(`Categorized ${completed} books with Jev.`);
+        await loadBooks();
+        await loadLogs();
+        await loadStats();
+    } catch (error) {
+        showMessage(error.message);
+    } finally {
+        button.disabled = false;
+        button.textContent = 'Categorize with Jev';
+    }
+});
+
+let libbyPollTimer;
+async function pollLibbyJob(wasRunning = false) {
+    clearTimeout(libbyPollTimer);
+    const button = document.getElementById('refreshLibby');
+    try {
+        const job = await apiRequest('/books/libby-availability/bulk');
+        if (job.running) {
+            button.disabled = true;
+            button.textContent = `NLB ${job.completed} / ${job.total}`;
+            const current = job.current_title ? ` · ${job.current_title}` : '';
+            showMessage(`NLB check continues in the background${current}`);
+            libbyPollTimer = setTimeout(() => pollLibbyJob(true), 1200);
+            return;
+        }
+        button.disabled = false;
+        button.textContent = 'Check NLB Libby';
+        if (wasRunning) {
+            showMessage(`NLB check complete: ${job.completed - job.failed} updated, ${job.failed} failed.`);
+            await loadBooks(); await loadLogs();
+        }
+    } catch (error) {
+        button.disabled = false;
+        button.textContent = 'Check NLB Libby';
+        showMessage(error.message);
+    }
+}
+
+document.getElementById('refreshLibby').addEventListener('click', async event => {
+    try {
+        const data = await apiRequest('/books/libby-availability/bulk', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({refresh_all: event.shiftKey})
+        });
+        if (data.status === 'nothing_to_check') {
+            showMessage('Every book already has an NLB result. Shift-click to refresh all.');
+            return;
+        }
+        await pollLibbyJob(true);
+    } catch (error) { showMessage(error.message); }
+});
+
+document.getElementById('clearSelection').addEventListener('click', () => {
+    selectedBookIds.clear();
+    updateSelectionCount();
+    renderWindow();
+});
+
+document.getElementById('applyBulk').addEventListener('click', async () => {
+    const category = document.getElementById('bulkCategory').value;
+    const readingStatus = document.getElementById('bulkStatus').value;
+    if (!selectedBookIds.size) { showMessage('Select at least one book.'); return; }
+    if (!category && !readingStatus) { showMessage('Choose a bulk change first.'); return; }
+    try {
+        const data = await apiRequest('/books/bulk-update', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ids: [...selectedBookIds], category: category || undefined, reading_status: readingStatus || undefined})
+        });
+        showMessage(`Updated ${data.updated} books.`);
+        document.getElementById('bulkCategory').value = '';
+        document.getElementById('bulkStatus').value = '';
+        await loadBooks(); await loadLogs(); await loadStats();
+    } catch (error) { showMessage(error.message); }
+});
+
+async function loadStats() {
+    try {
+        const data = await apiRequest('/stats');
+        const finished = data.reading_statuses.Finished || 0;
+        const reading = data.reading_statuses.Reading || 0;
+        const topAuthor = data.top_authors[0];
+        const statItems = [
+            [data.total, 'Total books'], [finished, 'Finished'],
+            [reading, 'Reading now'],
+            [topAuthor ? topAuthor.author : '—', 'Most collected author']
+        ];
+        document.getElementById('statsGrid').replaceChildren(...statItems.map(([value, label]) => {
+            const card = document.createElement('div');
+            const strong = document.createElement('strong');
+            const span = document.createElement('span');
+            strong.textContent = value; span.textContent = label;
+            card.append(strong, span); return card;
+        }));
+        const entries = Object.entries(data.categories)
+            .filter(([, count]) => count > 0)
+            .sort((a, b) => (b[1] - a[1]) || a[0].localeCompare(b[0]));
+        const maximum = Math.max(1, ...entries.map(([, count]) => count));
+        const chart = document.getElementById('categoryChart');
+        chart.replaceChildren(...entries.map(([name, count]) => {
+            const row = document.createElement('div');
+            const label = document.createElement('span');
+            const bar = document.createElement('i');
+            const value = document.createElement('b');
+            label.textContent = name; value.textContent = count;
+            bar.style.setProperty('--size', count / maximum);
+            row.append(label, bar, value);
+            return row;
+        }));
+    } catch (error) { showMessage(error.message); }
+}
+
+document.getElementById('importBooks').addEventListener('click', async () => {
+    const file = document.getElementById('importFile').files[0];
+    if (!file) { showMessage('Choose a JSON or CSV file first.'); return; }
+    const body = new FormData(); body.append('file', file);
+    try {
+        const data = await apiRequest('/books/import', {method: 'POST', body});
+        showMessage(`Imported ${data.imported}; skipped ${data.skipped_duplicates} duplicates${data.errors.length ? `; ${data.errors.length} rows had errors` : ''}.`);
+        document.getElementById('importFile').value = '';
+        await loadBooks(); await loadLogs(); await loadStats(); await loadCategoryOptions();
+    } catch (error) { showMessage(error.message); }
+});
+
+loadCategoryOptions();
+loadBooks();
+loadLogs();
+loadStats();
+pollLibbyJob();
+</script>
+</body>
+</html>

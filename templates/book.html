@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ book.title if book else 'Book not found' }} · Library</title>
+  <link rel="stylesheet" href="/static/book.css">
+</head>
+<body>
+<div class="page-glow" aria-hidden="true"></div>
+<main>
+  <header><a class="brand" href="/"><span class="brand-mark">L</span><span><strong>Library</strong><small>Book collection</small></span></a><a class="back" href="/">← Back to collection</a></header>
+  {% if book %}
+  <article class="book-detail">
+    <div class="cover">
+      {% if book.cover_url %}<img src="{{ book.cover_url }}" alt="Cover of {{ book.title }}">{% else %}<span>{{ book.title[0]|upper }}</span>{% endif %}
+    </div>
+    <div class="content">
+      <div class="badges"><span>{{ book.category|default('Uncategorized') }}</span><span>{{ book.reading_status|default('Want to Read') }}</span></div>
+      <h1>{{ book.title }}</h1>
+      <p class="author">by {{ book.author }}</p>
+      {% if book.personal_rating is defined %}<div class="my-rating"><strong>{{ '★' * book.personal_rating }}{{ '☆' * (5 - book.personal_rating) }}</strong><span>My rating</span></div>{% endif %}
+      {% if book.nlb_libby is defined %}<a class="libby-detail {{ 'available' if book.nlb_libby.available else '' }}" href="{{ book.nlb_libby.search_url }}" target="_blank" rel="noopener noreferrer"><strong>{% if not book.nlb_libby.found %}Not found at NLB Libby{% elif book.nlb_libby.available %}Available at NLB Libby{% else %}NLB Libby waitlist{% endif %}</strong><span>{% if book.nlb_libby.available %}{{ book.nlb_libby.available_copies }} digital copies available{% elif book.nlb_libby.found %}{{ book.nlb_libby.editions|length }} matching digital editions{% else %}Open the NLB search{% endif %} ↗</span></a>{% endif %}
+      <dl><div><dt>Published</dt><dd>{{ book.year }}</dd></div><div><dt>Library ID</dt><dd>{{ book.id }}</dd></div>{% if book.category_confidence is defined %}<div><dt>Jev confidence</dt><dd>{{ (book.category_confidence * 100)|round|int }}%</dd></div>{% endif %}</dl>
+      {% if book.url %}<a class="primary" href="{{ book.url }}" target="_blank" rel="noopener noreferrer">Open book page ↗</a>{% endif %}
+    </div>
+  </article>
+  {% else %}
+  <section class="missing"><span>404</span><h1>Book not found.</h1><p>This title may have been removed from the collection.</p><a class="primary" href="/">Return to the library</a></section>
+  {% endif %}
+</main>
+</body>
+</html>
